@@ -12,6 +12,7 @@ from retrieval_pipeline import retrieve_top_k
 
 PERSIST_DIR = os.path.join("data", "chroma")
 MAX_CONTEXT_CHUNKS = 5
+FALLBACK_RESPONSE = "I couldn't find relevant information in the uploaded documents."
 
 
 def load_api_key() -> str:
@@ -38,7 +39,7 @@ def save_uploads(files: List[st.runtime.uploaded_file_manager.UploadedFile], upl
 
 def format_sources(chunks: List[Dict[str, str]]) -> str:
     if not chunks:
-        return "Sources:\n- None"
+        return ""
     lines = ["Sources:"]
     for item in chunks:
         source = item.get("source", "unknown")
@@ -74,7 +75,7 @@ def build_prompt(query: str, chunks: List[Dict[str, str]], history: List[Dict[st
 
 def generate_answer(query: str, chunks: List[Dict[str, str]], history: List[Dict[str, str]], api_key: str) -> str:
     if not chunks:
-        return "I couldn't find relevant information in the uploaded documents."
+        return FALLBACK_RESPONSE
 
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-2.5-flash-lite")
@@ -83,13 +84,13 @@ def generate_answer(query: str, chunks: List[Dict[str, str]], history: List[Dict
     text = response.text.strip() if response.text else ""
 
     if not text:
-        return "I couldn't find relevant information in the uploaded documents."
+        return FALLBACK_RESPONSE
 
     return text
 
 
 def main() -> None:
-    st.set_page_config(page_title="InfoBOT", page_icon="📄", layout="wide")
+    st.set_page_config(page_title="InfoBOT", page_icon="", layout="wide")
     st.title("InfoBOT - Document Grounded Chatbot")
 
     api_key = load_api_key()
@@ -146,7 +147,10 @@ def main() -> None:
                     history=st.session_state.messages,
                     api_key=api_key,
                 )
-                response_text = answer + "\n\n" + format_sources(chunks)
+                sources_text = format_sources(chunks)
+                response_text = answer
+                if answer != FALLBACK_RESPONSE and sources_text:
+                    response_text = response_text + "\n\n" + sources_text
                 st.markdown(response_text)
 
         st.session_state.messages.append({"role": "assistant", "content": response_text})
